@@ -1,4 +1,4 @@
-// src/Indexer.cpp
+//Indexer.cpp
 #include "Indexer.h"
 #include <filesystem>
 #include <iostream>
@@ -101,7 +101,7 @@ void Indexer::processFile(const fs::path& filePath) {
     }
 }
 
-// NEW: Safe directory scanning function
+
 bool Indexer::scanDirectorySafe(const fs::path& path) {
     auto options = fs::directory_options::skip_permission_denied;
     int fileCount = 0;
@@ -117,11 +117,11 @@ bool Indexer::scanDirectorySafe(const fs::path& path) {
                     fileCount++;
                 }
                 else if (entry.is_directory()) {
-                    // Recursively scan subdirectories with error handling
+              
                     scanDirectorySafe(entry.path());
                 }
             } catch (const fs::filesystem_error& e) {
-                // Skip inaccessible entries
+ 
                 continue;
             } catch (...) {
                 continue;
@@ -159,7 +159,6 @@ void Indexer::run() {
 
         std::cout << "📁 Building file list (safe mode)..." << std::endl;
 
-        // Use our safe scanning function instead of recursive_directory_iterator
         bool success = scanDirectorySafe(m_rootPath);
 
         if (m_stopRequested) {
@@ -179,13 +178,11 @@ void Indexer::run() {
 
         std::cout << "✅ Found " << m_totalFiles << " accessible files" << std::endl;
 
-        // Use single thread for processing
         std::cout << "🧵 Using single thread" << std::endl;
         std::cout << "⚡ Processing files..." << std::endl;
 
         auto startTime = std::chrono::steady_clock::now();
 
-        // Single-threaded processing
         while (!m_fileQueue.empty() && !m_stopRequested) {
             fs::path filePath = m_fileQueue.front();
             m_fileQueue.pop();
@@ -215,3 +212,4 @@ void Indexer::run() {
         std::cerr << "Error: " << e.what() << std::endl;
     }
 }
+
