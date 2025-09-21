@@ -3,7 +3,7 @@
 #include <fstream>
 #include <sstream>
 
-// IMPLEMENTATION HERE
+
 std::string readFileContent(const std::filesystem::path& file_path) {
     std::ifstream file(file_path, std::ios::binary);
     if (!file) {
@@ -14,3 +14,4 @@ std::string readFileContent(const std::filesystem::path& file_path) {
     buffer << file.rdbuf();
     return buffer.str();
 }
+
