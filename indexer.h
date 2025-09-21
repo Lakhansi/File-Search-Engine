@@ -19,6 +19,9 @@ public:
     void setRootPath(const std::string& path);
     void run();
     void stop(); // NEW: Stop indexing
+    void stopImmediately() { m_stopRequested = true; }
+    // In Indexer.h, add this to the public section:
+    bool scanDirectorySafe(const std::filesystem::path& path);
 
 private:
     Index& m_index;
