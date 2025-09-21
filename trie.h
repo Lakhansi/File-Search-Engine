@@ -1,4 +1,4 @@
-// src/Trie.h
+// Trie.h
 #ifndef TRIE_H
 #define TRIE_H
 
@@ -12,7 +12,6 @@ struct TrieNode {
     bool isEndOfWord = false;
     std::vector<size_t> fileIndices;
 
-    // NEW: Serialization support
     template<class Archive>
     void serialize(Archive& ar, const unsigned int version) {
         ar & children & isEndOfWord & fileIndices;
@@ -26,9 +25,9 @@ public:
 
     void insert(const std::string& word, size_t fileIndex);
     std::vector<size_t> searchPrefix(const std::string& prefix) const;
-    void clear(); // NEW: Clear the trie
+    void clear(); 
 
-    // NEW: Serialization support
+
     template<class Archive>
     void serialize(Archive& ar, const unsigned int version) {
         ar & root;
@@ -41,4 +40,5 @@ private:
     void collectIndicesRecursive(TrieNode* node, std::vector<size_t>& results) const;
 };
 
-#endif // TRIE_H
+#endif 
+
