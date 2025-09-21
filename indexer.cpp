@@ -5,11 +5,14 @@
 #include <fstream>
 #include <sstream>
 #include <algorithm>
+#include <thread>
+#include <vector>
+#include <windows.h>
 #include "utils.h"
 
 namespace fs = std::filesystem;
 
-Indexer::Indexer(Index& index) : m_index(index) {}
+Indexer::Indexer(Index& index) : m_index(index), m_stopRequested(false) {}
 
 Indexer::~Indexer() {
     stop();
@@ -31,67 +34,103 @@ void Indexer::stop() {
     m_workerThreads.clear();
 }
 
-// NEW: Worker thread function
 void Indexer::workerThread() {
     while (!m_stopRequested) {
         std::unique_lock<std::mutex> lock(m_queueMutex);
-        m_queueCV.wait(lock, [this]() {
-            return !m_fileQueue.empty() || m_stopRequested;
-        });
 
-        if (m_stopRequested) break;
+        if (m_queueCV.wait_for(lock, std::chrono::milliseconds(100), [this]() {
+                return !m_fileQueue.empty() || m_stopRequested;
+            })) {
+            if (m_stopRequested) break;
 
-        if (!m_fileQueue.empty()) {
-            fs::path filePath = m_fileQueue.front();
-            m_fileQueue.pop();
-            lock.unlock();
+            if (!m_fileQueue.empty()) {
+                fs::path filePath = m_fileQueue.front();
+                m_fileQueue.pop();
+                lock.unlock();
 
-            processFile(filePath);
+                processFile(filePath);
 
-            // Update progress
-            int processed = ++m_filesProcessed;
-            if (processed % 10 == 0) { // Update every 10 files
-                std::cout << "Processed " << processed << " of " << m_totalFiles
-                          << " files (" << (processed * 100 / m_totalFiles) << "%)" << std::endl;
+                int processed = ++m_filesProcessed;
+                if (processed % 50 == 0) {
+                    std::cout << "Processed " << processed << " of " << m_totalFiles
+                              << " files (" << (processed * 100 / m_totalFiles) << "%)" << std::endl;
+                }
             }
         }
     }
 }
 
-// NEW: Process individual file
 void Indexer::processFile(const fs::path& filePath) {
     try {
         FileMetadata data;
         data.path = filePath;
         data.filename = filePath.filename().string();
-        data.size = fs::file_size(filePath);
-        data.last_modified = fs::last_write_time(filePath);
-        data.extension = filePath.extension().string();
 
-        if (!data.extension.empty() && data.extension[0] == '.') {
-            data.extension = data.extension.substr(1);
+        std::string ext = filePath.extension().string();
+        if (!ext.empty() && ext[0] == '.') {
+            ext = ext.substr(1);
         }
 
-        std::string ext_lower = data.extension;
-        std::transform(ext_lower.begin(), ext_lower.end(), ext_lower.begin(), ::tolower);
+        std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+        data.extension = ext;
+
+        try {
+            data.size = fs::file_size(filePath);
+            data.last_modified = fs::last_write_time(filePath);
+        } catch (...) {
+            return;
+        }
 
         static const std::unordered_set<std::string> text_extensions = {
             "txt", "cpp", "c", "h", "hpp", "py", "java", "js", "html", "css",
             "xml", "json", "csv", "md", "log", "conf", "config", "ini", "bat", "sh"
         };
 
-        if (text_extensions.find(ext_lower) != text_extensions.end() && data.size < 1048576) {
+        bool is_text_file = (text_extensions.find(ext) != text_extensions.end());
+
+        if (is_text_file && data.size > 0 && data.size < 1048576) {
             data.content = readFileContent(filePath);
         } else {
             data.content = "";
         }
 
-        // Use a lock to safely add to the index
         std::lock_guard<std::mutex> indexLock(m_queueMutex);
         m_index.addFile(data);
 
+    } catch (...) {
+    }
+}
+
+// NEW: Safe directory scanning function
+bool Indexer::scanDirectorySafe(const fs::path& path) {
+    auto options = fs::directory_options::skip_permission_denied;
+    int fileCount = 0;
+
+    try {
+        for (const auto& entry : fs::directory_iterator(path, options)) {
+            if (m_stopRequested) return false;
+
+            try {
+                if (entry.is_regular_file()) {
+                    m_totalFiles++;
+                    m_fileQueue.push(entry.path());
+                    fileCount++;
+                }
+                else if (entry.is_directory()) {
+                    // Recursively scan subdirectories with error handling
+                    scanDirectorySafe(entry.path());
+                }
+            } catch (const fs::filesystem_error& e) {
+                // Skip inaccessible entries
+                continue;
+            } catch (...) {
+                continue;
+            }
+        }
+        return true;
     } catch (const fs::filesystem_error& e) {
-        std::cerr << "Error processing file: " << filePath << " - " << e.what() << std::endl;
+        std::cerr << "Skipping inaccessible directory: " << path << " - " << e.what() << std::endl;
+        return false;
     }
 }
 
@@ -101,77 +140,78 @@ void Indexer::run() {
         return;
     }
 
-    std::cout << "Attempting to index directory: " << m_rootPath << std::endl;
+    std::cout << "🚀 Scanning: " << m_rootPath << std::endl;
 
-    // Reset state
     m_stopRequested = false;
     m_filesProcessed = 0;
     m_totalFiles = 0;
 
     try {
-        // First, count all files and build the queue
-        std::cout << "Scanning directory structure..." << std::endl;
-        for (const auto& entry : fs::recursive_directory_iterator(m_rootPath)) {
-            if (entry.is_regular_file()) {
-                m_totalFiles++;
-                m_fileQueue.push(entry.path());
-            }
-        }
-
-        std::cout << "Found " << m_totalFiles << " files. ";
-
-        // NEW: Optimize thread count based on workload size
-        unsigned int numThreads;
-        if (m_totalFiles < 20) {
-            // For small directories, use single thread (avoid overhead)
-            numThreads = 1;
-            std::cout << "Using single-threaded mode (small directory)" << std::endl;
-        } else {
-            // For larger directories, use multiple threads
-            numThreads = std::thread::hardware_concurrency();
-            if (numThreads == 0) numThreads = 4;
-            // Don't use more threads than files
-            numThreads = std::min(numThreads, static_cast<unsigned int>(m_totalFiles));
-            std::cout << "Using " << numThreads << " threads for indexing" << std::endl;
-        }
-
-        if (m_totalFiles == 0) {
-            std::cout << "No files to index." << std::endl;
+        if (!fs::exists(m_rootPath)) {
+            std::cerr << "Error: Directory does not exist!" << std::endl;
             return;
         }
 
-        // NEW: For very small workloads, process directly without threads
-        if (numThreads == 1) {
-            std::cout << "Processing files..." << std::endl;
-            while (!m_fileQueue.empty() && !m_stopRequested) {
-                fs::path filePath = m_fileQueue.front();
-                m_fileQueue.pop();
-                processFile(filePath);
-                m_filesProcessed++;
-            }
-        } else {
-            // Use multithreading for larger workloads
-            std::cout << "Starting multithreaded indexing..." << std::endl;
+        if (!fs::is_directory(m_rootPath)) {
+            std::cerr << "Error: Path is not a directory!" << std::endl;
+            return;
+        }
 
-            // Create worker threads
-            for (unsigned int i = 0; i < numThreads; ++i) {
-                m_workerThreads.emplace_back(&Indexer::workerThread, this);
-            }
+        std::cout << "📁 Building file list (safe mode)..." << std::endl;
 
-            // Wait for all threads to complete
-            for (auto& thread : m_workerThreads) {
-                if (thread.joinable()) {
-                    thread.join();
-                }
-            }
+        // Use our safe scanning function instead of recursive_directory_iterator
+        bool success = scanDirectorySafe(m_rootPath);
 
-            m_workerThreads.clear();
+        if (m_stopRequested) {
+            std::cout << "⏹️  Scanning stopped" << std::endl;
+            return;
+        }
+
+        if (m_totalFiles == 0) {
+            if (!success) {
+                std::cout << "❌ Could not access any files in the directory." << std::endl;
+                std::cout << "💡 Try running as Administrator or choose a different directory." << std::endl;
+            } else {
+                std::cout << "ℹ️  No files found in directory." << std::endl;
+            }
+            return;
+        }
+
+        std::cout << "✅ Found " << m_totalFiles << " accessible files" << std::endl;
+
+        // Use single thread for processing
+        std::cout << "🧵 Using single thread" << std::endl;
+        std::cout << "⚡ Processing files..." << std::endl;
+
+        auto startTime = std::chrono::steady_clock::now();
+
+        // Single-threaded processing
+        while (!m_fileQueue.empty() && !m_stopRequested) {
+            fs::path filePath = m_fileQueue.front();
+            m_fileQueue.pop();
+            processFile(filePath);
+            m_filesProcessed++;
+
+            if (m_filesProcessed % 10 == 0) {
+                auto currentTime = std::chrono::steady_clock::now();
+                auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - startTime).count();
+                std::cout << "Processed " << m_filesProcessed << "/" << m_totalFiles
+                          << " (" << (m_filesProcessed * 100 / m_totalFiles) << "%)"
+                          << " in " << elapsed << "ms" << std::endl;
+            }
+        }
+
+        auto endTime = std::chrono::steady_clock::now();
+        auto totalTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
+
+        std::cout << "✅ Complete! Processed " << m_filesProcessed << " files in " << totalTime << "ms" << std::endl;
+        if (m_filesProcessed > 0) {
+            std::cout << "⏱️  Average: " << (totalTime / m_filesProcessed) << "ms per file" << std::endl;
         }
 
     } catch (const fs::filesystem_error& e) {
         std::cerr << "Filesystem error: " << e.what() << std::endl;
-        stop();
+    } catch (const std::exception& e) {
+        std::cerr << "Error: " << e.what() << std::endl;
     }
-
-    std::cout << "Indexing complete! Processed " << m_filesProcessed << " files." << std::endl;
 }
