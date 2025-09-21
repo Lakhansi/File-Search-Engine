@@ -1,4 +1,4 @@
-// src/main.cpp
+// main.cpp
 #include <iostream>
 #include <fstream>
 #include <chrono>
@@ -11,7 +11,6 @@ bool isAdmin() {
     BOOL isAdmin = FALSE;
     PSID adminGroup = NULL;
 
-    // Allocate and initialize SID for the Administrators group
     SID_IDENTIFIER_AUTHORITY NtAuthority = SECURITY_NT_AUTHORITY;
     if (AllocateAndInitializeSid(&NtAuthority, 2, SECURITY_BUILTIN_DOMAIN_RID, DOMAIN_ALIAS_RID_ADMINS, 0, 0, 0, 0, 0, 0, &adminGroup)) {
         if (!CheckTokenMembership(NULL, adminGroup, &isAdmin)) {
@@ -31,7 +30,7 @@ void runAsAdmin() {
     exit(0);
 }
 
-// In main.cpp, simplify the path input:
+
 std::string getRootPathFromUser() {
     std::string path;
     std::cout << "\n📁 Enter the directory path to scan: ";
@@ -41,10 +40,10 @@ std::string getRootPathFromUser() {
         return ".\\";
     }
 
-    // Convert forward slashes to backslashes for Windows
+  
     std::replace(path.begin(), path.end(), '/', '\\');
 
-    // Ensure path ends with backslash for directories
+
     if (path.back() != '\\' && path.find('.') == std::string::npos) {
         path += '\\';
     }
@@ -56,7 +55,7 @@ bool shouldUseCache() {
     char choice;
     std::cout << "💾 Use cached index if available? (y/n): ";
     std::cin >> choice;
-    std::cin.ignore(); // Clear input buffer
+    std::cin.ignore(); 
     return (choice == 'y' || choice == 'Y');
 }
 
@@ -69,7 +68,6 @@ int main() {
     // Get user input for directory path
     std::string rootPath = getRootPathFromUser();
 
-    // Check if user wants to scan system drive and doesn't have admin rights
     if ((rootPath == "C:\\" || rootPath.find("C:\\\\") != std::string::npos) && !isAdmin()) {
         std::cout << "\n⚠️  WARNING: Scanning C:\\ requires Administrator privileges!" << std::endl;
         std::cout << "   Some system directories will be inaccessible." << std::endl;
@@ -87,7 +85,6 @@ int main() {
 
     bool useCache = shouldUseCache();
 
-    // Try to load from cache first (if user wants to)
     if (useCache) {
         std::cout << "Attempting to load index from cache..." << std::endl;
         if (index.loadFromFile(cacheFile)) {
@@ -112,7 +109,6 @@ int main() {
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
         std::cout << "⏱️  Indexing completed in " << duration.count() << " milliseconds" << std::endl;
 
-        // Save to cache for next time
         std::cout << "💾 Saving index to cache..." << std::endl;
         if (index.saveToFile(cacheFile)) {
             std::cout << "✅ Cache saved successfully!" << std::endl;
@@ -121,7 +117,6 @@ int main() {
         }
     }
 
-    // Interactive search loop
     std::string searchTerm;
     std::cout << "\n🔍 === Interactive Search Mode ===" << std::endl;
 
@@ -137,7 +132,6 @@ int main() {
             continue;
         }
 
-        // Search by content
         std::cout << "\n📝 Files containing '" << searchTerm << "':" << std::endl;
         auto results = index.searchByContent(searchTerm);
 
@@ -151,7 +145,6 @@ int main() {
             std::cout << "Found " << results.size() << " file(s)" << std::endl;
         }
 
-        // Also search by extension if it looks like a file extension
         if (searchTerm.size() <= 5 && searchTerm.find('.') != std::string::npos) {
             std::cout << "\n📁 Files with extension '" << searchTerm << "':" << std::endl;
             auto extResults = index.searchByExtension(searchTerm);
@@ -174,3 +167,4 @@ int main() {
 
     return 0;
 }
+
