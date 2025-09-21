@@ -1,4 +1,4 @@
-// src/Indexer.h
+// Indexer.h
 #ifndef INDEXER_H
 #define INDEXER_H
 
@@ -18,16 +18,16 @@ public:
 
     void setRootPath(const std::string& path);
     void run();
-    void stop(); // NEW: Stop indexing
+    void stop(); 
     void stopImmediately() { m_stopRequested = true; }
-    // In Indexer.h, add this to the public section:
+    
     bool scanDirectorySafe(const std::filesystem::path& path);
 
 private:
     Index& m_index;
     std::string m_rootPath;
 
-    // NEW: Threading members
+    
     std::vector<std::thread> m_workerThreads;
     std::queue<std::filesystem::path> m_fileQueue;
     std::mutex m_queueMutex;
@@ -36,8 +36,9 @@ private:
     std::atomic<int> m_filesProcessed{0};
     int m_totalFiles{0};
 
-    void workerThread(); // NEW: Worker thread function
-    void processFile(const std::filesystem::path& filePath); // NEW: Process individual file
+    void workerThread(); 
+    void processFile(const std::filesystem::path& filePath); 
 };
 
-#endif // INDEXER_H
+#endif 
+
