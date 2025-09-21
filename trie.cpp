@@ -1,7 +1,7 @@
-// src/Trie.cpp
+// rie.cpp
 #include "Trie.h"
 #include <iostream>
-#include <functional> // ADD THIS LINE
+#include <functional> 
 
 Trie::Trie() {
     root = new TrieNode();
@@ -29,22 +29,21 @@ std::vector<size_t> Trie::searchPrefix(const std::string& prefix) const {
     std::vector<size_t> results;
     TrieNode* current = root;
 
-    // Traverse to the end of the prefix
+
     for (char c : prefix) {
         if (current->children.find(c) == current->children.end()) {
-            return results; // Prefix not found, return empty
+            return results; 
         }
         current = current->children[c];
     }
 
-    // Collect all file indices from this node and all its descendants
+
     std::function<void(TrieNode*)> collectIndices = [&](TrieNode* node) {
         if (!node) return;
 
-        // Add indices from current node
         results.insert(results.end(), node->fileIndices.begin(), node->fileIndices.end());
 
-        // Recursively collect from all children
+
         for (auto& child : node->children) {
             collectIndices(child.second);
         }
@@ -69,3 +68,4 @@ void Trie::clearRecursive(TrieNode* node) {
 
     delete node;
 }
+
