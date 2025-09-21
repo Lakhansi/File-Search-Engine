@@ -108,4 +108,8 @@ Multithreading patterns and synchronization
 
 📄 License
 MIT License - feel free to use this code for learning and development purposes.
+-----------------------------------------------------------------------------
+The GUI is in development and will be available soon, featuring some 
+additional features. Until then, I hope you enjoy this.
+----------------------------------------------------------------------------
 
