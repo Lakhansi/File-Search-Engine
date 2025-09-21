@@ -1,4 +1,4 @@
-// src/Index.h
+//Index.h
 #ifndef INDEX_H
 #define INDEX_H
 
@@ -7,7 +7,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
-#include <algorithm> // ADD for std::sort
+#include <algorithm> 
 #include "Trie.h"
 
 struct FileMetadata {
@@ -19,7 +19,7 @@ struct FileMetadata {
     std::string content;
 };
 
-// NEW: Ranking criteria enum
+
 enum class SortBy {
     NAME,
     SIZE_ASC,
@@ -58,7 +58,7 @@ private:
     std::string toLowerCase(const std::string& str) const;
     bool isTextFile(const std::string& extension) const;
 
-    // NEW: Ranking helper functions
+
     std::vector<FileMetadata> sortResults(std::vector<FileMetadata> results, SortBy criteria) const;
     int calculateRelevance(const FileMetadata& file, const std::vector<std::string>& query_words) const;
 
@@ -70,4 +70,5 @@ private:
     void readInvertedIndex(std::ifstream& in);
 };
 
-#endif // INDEX_H
+#endif 
+
