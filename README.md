@@ -47,13 +47,13 @@ mkdir build
 cd build
 
 # Configure with CMake
-cmake -G "MinGW Makefiles" ..
+cmake -G "MinGW Makefiles" ...
 
 # Build the project
-make
+mingw32-make
 
 # Run the application
-./FileSearchApp
+FileSearchApp.exe
 ```
 🎯 Usage
 Basic Indexing and Search
